@@ -1,6 +1,5 @@
 # Clash rules for Xiaomi
 
-[![Latest Release](https://img.shields.io/github/release-date/ygbkm/clash-rules-xiaomi?display_date=published_at&label=Latest%20Release&color=%23347d39)](https://github.com/ygbkm/clash-rules-xiaomi/releases)
 [![Downloads](https://img.shields.io/github/downloads/ygbkm/clash-rules-xiaomi/total?label=Downloads&color=%23347d39)](https://github.com/ygbkm/clash-rules-xiaomi/releases)
 
 Single-file classical
