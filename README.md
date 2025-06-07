@@ -11,26 +11,10 @@ Automatically updated every day.
 
 | Format | Download link |
 |--------|---------------|
-| Yaml   | https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.yaml |
 | Text   | https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.txt |
+| Yaml   | https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.yaml |
 
 ## Usage
-
-### Yaml format
-
-```yaml
-rule-providers:
-  xiaomi:
-    type: http
-    format: yaml
-    behavior: classical
-    url: https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.yaml
-    path: ./ruleset/xiaomi.yaml
-    interval: 86400
-
-rules:
-  - RULE-SET,xiaomi,REJECT
-```
 
 ### Text format
 
@@ -42,6 +26,22 @@ rule-providers:
     behavior: classical
     url: https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.txt
     path: ./ruleset/xiaomi.txt
+    interval: 86400
+
+rules:
+  - RULE-SET,xiaomi,REJECT
+```
+
+### Yaml format
+
+```yaml
+rule-providers:
+  xiaomi:
+    type: http
+    format: yaml
+    behavior: classical
+    url: https://github.com/ygbkm/clash-rules-xiaomi/releases/latest/download/rules.yaml
+    path: ./ruleset/xiaomi.yaml
     interval: 86400
 
 rules:
