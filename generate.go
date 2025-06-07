@@ -40,65 +40,47 @@ func main() {
 
 	g, ctx := errgroup.WithContext(context.Background())
 	g.SetLimit(100)
+
 	for _, url := range sources {
 		g.Go(func() error {
-			return getLines(ctx, url, lineFunc, lengthFunc)
+			return httpGetLines(ctx, url, lineFunc, lengthFunc)
 		})
 	}
 
 	hosts := make([]string, 0, max(<-lengthChan, 0))
 
+	wg := new(sync.WaitGroup)
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for line := range lineChan {
-			firstField := true
-			for field := range strings.FieldsSeq(line) {
-				if firstField {
-					if field[0] == '#' {
-						break
-					}
-					firstField = false
-					continue
-				}
-				hosts = append(hosts, field)
-			}
+			parseHostsLine(line, func(h string) {
+				hosts = append(hosts, h)
+			})
 		}
 	}()
 
 	checkerr(g.Wait())
+	close(lineChan)
+	wg.Wait()
 
 	slices.Sort(hosts)
 	hosts = unique(hosts)
 	domains, ip4s, ip6s := separateHosts(hosts)
 
 	buf := new(bytes.Buffer)
-	checkerr(writeTextRules(domains, ip4s, ip6s, buf))
+	writeTextRules(buf, domains, ip4s, ip6s)
 	checkerr(os.WriteFile("rules.txt", buf.Bytes(), 0644))
 
 	buf.Reset()
 	buf.WriteString("payload:\n")
-	checkerr(writeYamlRules(domains, ip4s, ip6s, buf))
+	writeYamlRules(buf, domains, ip4s, ip6s)
 	checkerr(os.WriteFile("rules.yaml", buf.Bytes(), 0644))
 
 	fmt.Println("done.")
 }
 
-// unique returns a deduplicated version of the sorted slice s.
-// s is overwritten and the result uses the underlying array of s.
-func unique[T comparable](s []T) []T {
-	if len(s) == 0 {
-		return s
-	}
-	r := s[:1]
-	for _, v := range s[1:] {
-		if v != r[len(r)-1] {
-			r = append(r, v)
-		}
-	}
-	return r
-}
-
-// getLines sends the lines of url's contents to ch.
-func getLines(
+func httpGetLines(
 	ctx context.Context,
 	url string,
 	lineFunc func(line string),
@@ -122,7 +104,9 @@ func getLines(
 	}
 	defer resp.Body.Close()
 
-	lengthFunc(resp.ContentLength)
+	if lengthFunc != nil {
+		lengthFunc(resp.ContentLength)
+	}
 
 	s := bufio.NewScanner(resp.Body)
 	for s.Scan() {
@@ -137,14 +121,33 @@ func getLines(
 	return nil
 }
 
-func writeString(w io.StringWriter, s ...string) error {
-	for _, v := range s {
-		_, err := w.WriteString(v)
-		if err != nil {
-			return err
+func parseHostsLine(line string, hostFunc func(host string)) {
+	firstField := true
+	for field := range strings.FieldsSeq(line) {
+		if firstField {
+			if field[0] == '#' {
+				break
+			}
+			firstField = false
+			continue
+		}
+		hostFunc(field)
+	}
+}
+
+// unique returns a deduplicated version of the sorted slice s.
+// s is overwritten and the result uses the underlying array of s.
+func unique[T comparable](s []T) []T {
+	if len(s) == 0 {
+		return s
+	}
+	r := s[:1]
+	for _, v := range s[1:] {
+		if v != r[len(r)-1] {
+			r = append(r, v)
 		}
 	}
-	return nil
+	return r
 }
 
 func separateHosts(hosts []string) (domains, ip4s, ip6s []string) {
@@ -170,7 +173,7 @@ func separateHosts(hosts []string) (domains, ip4s, ip6s []string) {
 	return
 }
 
-func writeTextRules(domains, ip4s, ip6s []string, w io.StringWriter) error {
+func writeTextRules(w io.StringWriter, domains, ip4s, ip6s []string) error {
 	for _, v := range domains {
 		if err := writeString(w, "DOMAIN-SUFFIX,", v, "\n"); err != nil {
 			return err
@@ -189,7 +192,7 @@ func writeTextRules(domains, ip4s, ip6s []string, w io.StringWriter) error {
 	return nil
 }
 
-func writeYamlRules(domains, ip4s, ip6s []string, w io.StringWriter) error {
+func writeYamlRules(w io.StringWriter, domains, ip4s, ip6s []string) error {
 	for _, v := range domains {
 		if err := writeString(w, "- 'DOMAIN-SUFFIX,", v, "'\n"); err != nil {
 			return err
@@ -202,6 +205,16 @@ func writeYamlRules(domains, ip4s, ip6s []string, w io.StringWriter) error {
 	}
 	for _, v := range ip6s {
 		if err := writeString(w, "- 'IP-CIDR6,", v, "/128'\n"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeString(w io.StringWriter, s ...string) error {
+	for _, v := range s {
+		_, err := w.WriteString(v)
+		if err != nil {
 			return err
 		}
 	}
