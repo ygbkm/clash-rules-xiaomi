@@ -32,7 +32,7 @@ rule-providers:
     interval: 86400
 
 rules:
-  - RULE-SET,xiaomi,DIRECT
+  - RULE-SET,xiaomi,REJECT
 ```
 
 ### Text format
@@ -48,7 +48,7 @@ rule-providers:
     interval: 86400
 
 rules:
-  - RULE-SET,xiaomi,DIRECT
+  - RULE-SET,xiaomi,REJECT
 ```
 
 ## Note about formats
