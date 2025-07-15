@@ -11,7 +11,6 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -25,44 +24,30 @@ var sources = []string{
 func main() {
 
 	lineChan := make(chan string, 1024)
-	lineFunc := func(line string) {
-		lineChan <- line
-	}
-
-	lengthChan := make(chan int64)
-	lengthOnce := new(sync.Once)
-	lengthFunc := func(length int64) {
-		lengthOnce.Do(func() {
-			lengthChan <- length
-			close(lengthChan)
-		})
-	}
 
 	g, ctx := errgroup.WithContext(context.Background())
 	g.SetLimit(100)
 
 	for _, url := range sources {
 		g.Go(func() error {
-			return httpGetLines(ctx, url, lineFunc, lengthFunc)
+			return httpGetLines(ctx, url, func(line string) {
+				lineChan <- line
+			})
 		})
 	}
 
-	hosts := make([]string, 0, max(<-lengthChan, 0))
-
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
-		for line := range lineChan {
-			parseHostsLine(line, func(h string) {
-				hosts = append(hosts, h)
-			})
-		}
+		checkErr(g.Wait())
+		close(lineChan)
 	}()
 
-	checkerr(g.Wait())
-	close(lineChan)
-	wg.Wait()
+	hosts := make([]string, 0)
+
+	for line := range lineChan {
+		parseHostsLine(line, func(host string) {
+			hosts = append(hosts, host)
+		})
+	}
 
 	slices.Sort(hosts)
 	hosts = unique(hosts)
@@ -70,12 +55,12 @@ func main() {
 
 	buf := new(bytes.Buffer)
 	writeTextRules(buf, domains, ip4s, ip6s)
-	checkerr(os.WriteFile("rules.txt", buf.Bytes(), 0644))
-
+	checkErr(os.WriteFile("rules.txt", buf.Bytes(), 0644))
 	buf.Reset()
+
 	buf.WriteString("payload:\n")
 	writeYamlRules(buf, domains, ip4s, ip6s)
-	checkerr(os.WriteFile("rules.yaml", buf.Bytes(), 0644))
+	checkErr(os.WriteFile("rules.yaml", buf.Bytes(), 0644))
 
 	fmt.Println("done.")
 }
@@ -84,7 +69,6 @@ func httpGetLines(
 	ctx context.Context,
 	url string,
 	lineFunc func(line string),
-	lengthFunc func(length int64),
 ) error {
 
 	fmt.Println("fetching", url)
@@ -103,10 +87,6 @@ func httpGetLines(
 		return fmt.Errorf("could not make request: %w", err)
 	}
 	defer resp.Body.Close()
-
-	if lengthFunc != nil {
-		lengthFunc(resp.ContentLength)
-	}
 
 	s := bufio.NewScanner(resp.Body)
 	for s.Scan() {
@@ -221,7 +201,7 @@ func writeString(w io.StringWriter, s ...string) error {
 	return nil
 }
 
-func checkerr(err error) {
+func checkErr(err error) {
 	if err != nil {
 		panic(err)
 	}
